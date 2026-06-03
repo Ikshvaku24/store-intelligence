@@ -1,0 +1,20 @@
+# Heavy detection-pipeline image (Process 1). Never part of the acceptance gate.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# OpenCV / ultralytics runtime libs.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+
+COPY requirements-pipeline.txt .
+RUN pip install --no-cache-dir -r requirements-pipeline.txt
+
+COPY app ./app
+COPY pipeline ./pipeline
+
+ENTRYPOINT ["bash", "pipeline/run.sh"]

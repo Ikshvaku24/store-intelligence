@@ -1,0 +1,6 @@
+{
+  "_comment": "Entry tripwire(s), ONE per ENTRY-role camera. Key = the camera_id. p1/p2 = the two endpoints of a line drawn ACROSS the door threshold (just inside the glass so foot-points stay visible). inside_point = any pixel on the store-floor (inside) side - it tells the counter which crossing direction is an ENTRY vs an EXIT. min_frames_each_side = debounce (frames confirmed on each side before a crossing counts). Draw it in the Studio (entry cameras switch to tripwire mode) or with pipeline/calibrate.py --mode line.",
+  "_example": {
+    "CAM_ENTRY": {"p1": [167, 544], "p2": [880, 439], "inside_point": [457, 400], "inside_side": "floor", "min_frames_each_side": 3}
+  }
+}

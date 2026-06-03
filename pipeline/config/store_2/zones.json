@@ -1,0 +1,330 @@
+{
+  "_comment": "Store 2 zones. Polygons are [x,y] pixel coords on the DISTORTED video frame (no lens calibration). Camera keys start EMPTY -- draw each zone with pipeline/calibrate.py (see _planned for the intended set and the exact flags). The pipeline ignores _comment/_planned (they are not camera_ids). Shared zones across cameras are fine; the API aggregates by zone_id.",
+  "_planned": {
+    "CAM_S2_ZONE": {
+      "S2_Z01": {
+        "zone_name": "Left Wall Shelf",
+        "zone_type": "SHELF",
+        "is_revenue_zone": true,
+        "_draw": "--zone-type SHELF --zone-name \"Left Wall Shelf\" --revenue"
+      },
+      "S2_Z02": {
+        "zone_name": "Right Wall Shelf",
+        "zone_type": "SHELF",
+        "is_revenue_zone": true,
+        "_draw": "--zone-type SHELF --zone-name \"Right Wall Shelf\" --revenue"
+      },
+      "S2_Z03": {
+        "zone_name": "Center Display Table",
+        "zone_type": "DISPLAY",
+        "is_revenue_zone": true,
+        "_draw": "--zone-type DISPLAY --zone-name \"Center Display Table\" --revenue"
+      }
+    },
+    "CAM_S2_BILL": {
+      "S2_BILLING_QUEUE": {
+        "zone_name": "Billing Counter Queue",
+        "zone_type": "BILLING",
+        "is_revenue_zone": true,
+        "is_queue_zone": true,
+        "_draw": "--zone-type BILLING --zone-name \"Billing Counter Queue\" --revenue --queue-zone"
+      },
+      "S2_BILLING_STAFF": {
+        "zone_name": "Billing Counter Staff",
+        "zone_type": "BILLING",
+        "is_staff_zone": true,
+        "_draw": "--zone-type BILLING --zone-name \"Billing Counter Staff\" --staff-zone"
+      }
+    }
+  },
+  "CAM_S2_ZONE": {
+    "S2_Z01": {
+      "polygon": [
+        [
+          4,
+          370
+        ],
+        [
+          366,
+          126
+        ],
+        [
+          403,
+          487
+        ],
+        [
+          46,
+          792
+        ],
+        [
+          -1,
+          618
+        ],
+        [
+          2,
+          369
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "SHELF",
+      "zone_name": "Left Wall Shelf",
+      "is_revenue_zone": true
+    },
+    "S2_Z02": {
+      "polygon": [
+        [
+          520,
+          31
+        ],
+        [
+          956,
+          402
+        ],
+        [
+          956,
+          689
+        ],
+        [
+          933,
+          904
+        ],
+        [
+          768,
+          726
+        ],
+        [
+          483,
+          374
+        ],
+        [
+          490,
+          209
+        ],
+        [
+          521,
+          30
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "SHELF",
+      "zone_name": "Right Wall Shelf",
+      "is_revenue_zone": true
+    },
+    "S2_Z03": {
+      "polygon": [
+        [
+          383,
+          912
+        ],
+        [
+          365,
+          1078
+        ],
+        [
+          603,
+          1078
+        ],
+        [
+          482,
+          816
+        ],
+        [
+          383,
+          913
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "DISPLAY",
+      "zone_name": "Center Display Table",
+      "is_revenue_zone": true
+    }
+  },
+  "CAM_S2_BILL": {
+    "S2_BILLING_QUEUE": {
+      "polygon": [
+        [
+          347,
+          477
+        ],
+        [
+          348,
+          536
+        ],
+        [
+          691,
+          549
+        ],
+        [
+          716,
+          387
+        ],
+        [
+          666,
+          164
+        ],
+        [
+          365,
+          156
+        ],
+        [
+          348,
+          477
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": true,
+      "sku_zone": null,
+      "zone_type": "BILLING",
+      "zone_name": "Billing Counter Queue",
+      "is_revenue_zone": true
+    },
+    "S2_BILLING_STAFF": {
+      "polygon": [
+        [
+          345,
+          625
+        ],
+        [
+          701,
+          606
+        ],
+        [
+          954,
+          892
+        ],
+        [
+          955,
+          1077
+        ],
+        [
+          42,
+          1078
+        ],
+        [
+          339,
+          624
+        ]
+      ],
+      "is_staff_zone": true,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "BILLING",
+      "zone_name": "Billing Counter Staff",
+      "is_revenue_zone": false
+    },
+    "S2_LIPSTICK": {
+      "polygon": [
+        [
+          45,
+          204
+        ],
+        [
+          107,
+          -1
+        ],
+        [
+          263,
+          1
+        ],
+        [
+          174,
+          475
+        ],
+        [
+          45,
+          202
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "SHELF",
+      "zone_name": "Lipstick Zone",
+      "is_revenue_zone": true
+    },
+    "S2_MIRROR": {
+      "polygon": [
+        [
+          789,
+          123
+        ],
+        [
+          841,
+          511
+        ],
+        [
+          954,
+          529
+        ],
+        [
+          956,
+          94
+        ],
+        [
+          924,
+          0
+        ],
+        [
+          792,
+          121
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "CONSULT",
+      "zone_name": "Mirror Zone",
+      "is_revenue_zone": true
+    },
+    "S2_DISPLAY": {
+      "polygon": [
+        [
+          478,
+          147
+        ],
+        [
+          490,
+          245
+        ],
+        [
+          592,
+          252
+        ],
+        [
+          616,
+          147
+        ],
+        [
+          635,
+          34
+        ],
+        [
+          627,
+          2
+        ],
+        [
+          462,
+          0
+        ],
+        [
+          478,
+          144
+        ]
+      ],
+      "is_staff_zone": false,
+      "is_queue_zone": false,
+      "sku_zone": null,
+      "zone_type": "DISPLAY",
+      "zone_name": "Table Display",
+      "is_revenue_zone": true
+    }
+  },
+  "CAM_S2_ENTRY_1": {},
+  "CAM_S2_ENTRY_2": {}
+}

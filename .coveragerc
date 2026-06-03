@@ -1,0 +1,23 @@
+# Coverage scope.
+#
+# detect.py / reid.py / calibrate.py wrap torch/ultralytics/torchreid/opencv and
+# an interactive display. They cannot run in the lightweight test venv and are
+# exercised via the pipeline Docker image instead. They are omitted here so the
+# reported percentage reflects the logic we actually unit-test (the API + the
+# pure-Python pipeline core: geometry, sessions, emit, run_pipeline).
+[run]
+omit =
+    pipeline/detect.py
+    pipeline/reid.py
+    pipeline/calibrate.py
+    pipeline/vlm_staff.py
+    pipeline/visualize.py
+    pipeline/preview_zones.py
+    scripts/*
+    tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise SystemExit

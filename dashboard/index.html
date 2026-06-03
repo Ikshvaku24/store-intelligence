@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Store Intelligence — Live</title>
+  <style>
+    :root { --bg:#0f1115; --card:#1a1d24; --accent:#7c5cff; --ok:#27c498; --warn:#ffb020; --crit:#ff5470; --muted:#8a90a2; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:#e8eaf0; }
+    header { padding:20px 28px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #23262f; }
+    header h1 { font-size:18px; margin:0; font-weight:600; }
+    .pill { font-size:12px; color:var(--muted); }
+    .live { color:var(--ok); }
+    main { padding:24px 28px; max-width:1100px; margin:0 auto; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .card { background:var(--card); border:1px solid #23262f; border-radius:14px; padding:20px; }
+    .card .label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+    .card .value { font-size:40px; font-weight:700; margin-top:6px; }
+    .card .sub { font-size:12px; color:var(--muted); margin-top:4px; }
+    section h2 { font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin:28px 0 12px; }
+    .funnel-row { display:flex; align-items:center; gap:12px; margin:8px 0; }
+    .funnel-row .name { width:130px; font-size:13px; }
+    .bar { height:26px; background:linear-gradient(90deg,var(--accent),#9d86ff); border-radius:6px; min-width:2px; transition:width .4s ease; }
+    .funnel-row .count { font-size:13px; color:var(--muted); }
+    .anom { padding:10px 14px; border-radius:10px; margin:8px 0; font-size:13px; border-left:4px solid var(--muted); background:#16191f; }
+    .anom.INFO { border-color:var(--muted); }
+    .anom.WARN { border-color:var(--warn); }
+    .anom.CRITICAL { border-color:var(--crit); }
+    .controls { display:flex; gap:10px; align-items:center; margin-left:auto; }
+    input { background:#0c0e12; border:1px solid #2a2e39; color:#e8eaf0; border-radius:8px; padding:6px 10px; font-size:13px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; animation:pulse 1.4s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Store Intelligence</h1>
+    <span class="pill"><span class="dot"></span> <span class="live">LIVE</span> · polling every 2s</span>
+    <div class="controls">
+      <label class="pill">API</label>
+      <input id="api" value="http://localhost:8000" size="22" />
+      <label class="pill">Store</label>
+      <input id="store" value="STORE_BLR_002" size="14" />
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <div class="card"><div class="label">Unique Visitors</div><div class="value" id="uv">—</div><div class="sub" id="conf"></div></div>
+      <div class="card"><div class="label">Conversion Rate</div><div class="value" id="cr">—</div><div class="sub" id="purch"></div></div>
+      <div class="card"><div class="label">Queue Depth</div><div class="value" id="q">—</div><div class="sub">current</div></div>
+      <div class="card"><div class="label">Abandonment</div><div class="value" id="ab">—</div><div class="sub">of queue joiners</div></div>
+    </div>
+
+    <section>
+      <h2>Conversion Funnel</h2>
+      <div id="funnel"></div>
+    </section>
+
+    <section>
+      <h2>Anomalies</h2>
+      <div id="anomalies"><div class="pill">none</div></div>
+    </section>
+
+    <p class="pill" id="updated"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const api = () => $("api").value.replace(/\/$/, "");
+    const store = () => $("store").value.trim();
+    const pct = (x) => (x * 100).toFixed(1) + "%";
+
+    async function getJSON(path) {
+      const r = await fetch(api() + path);
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    }
+
+    async function tick() {
+      try {
+        const m = await getJSON(`/stores/${store()}/metrics`);
+        $("uv").textContent = m.unique_visitors;
+        $("conf").textContent = "data confidence: " + m.data_confidence;
+        $("cr").textContent = pct(m.conversion_rate);
+        $("purch").textContent = m.purchases + " purchases";
+        $("q").textContent = m.current_queue_depth;
+        $("ab").textContent = pct(m.abandonment_rate);
+
+        const f = await getJSON(`/stores/${store()}/funnel`);
+        const max = Math.max(1, ...f.stages.map(s => s.count));
+        $("funnel").innerHTML = f.stages.map(s => `
+          <div class="funnel-row">
+            <div class="name">${s.stage}</div>
+            <div class="bar" style="width:${(s.count / max) * 70}%"></div>
+            <div class="count">${s.count}${s.drop_off_pct ? ` · −${s.drop_off_pct}%` : ""}</div>
+          </div>`).join("");
+
+        const a = await getJSON(`/stores/${store()}/anomalies`);
+        $("anomalies").innerHTML = a.anomalies.length
+          ? a.anomalies.map(x => `<div class="anom ${x.severity}"><b>${x.type}</b> · ${x.severity}<br/>${x.detail || ""}<br/><span class="pill">${x.suggested_action || ""}</span></div>`).join("")
+          : `<div class="pill">none</div>`;
+
+        $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+      } catch (e) {
+        $("updated").textContent = "waiting for API… (" + e.message + ")";
+      }
+    }
+
+    tick();
+    setInterval(tick, 2000);
+  </script>
+</body>
+</html>

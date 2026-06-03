@@ -1,0 +1,13 @@
+# PROCESS 2 -- graded API. Lightweight, NO torch/ultralytics/opencv.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+SQLAlchemy==2.0.36
+psycopg[binary]==3.2.3
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# Tests + coverage
+pytest==8.3.4
+pytest-cov==6.0.0
+httpx==0.28.1

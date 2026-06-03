@@ -1,0 +1,5 @@
+# Calibration Studio — a separate operator tool (NOT the graded API).
+# Reuses the lightweight API deps (FastAPI/uvicorn) and adds OpenCV purely for the
+# "Extract frames" button (decoding the clip into frames you draw zones on).
+-r requirements-api.txt
+opencv-python-headless==4.10.0.84

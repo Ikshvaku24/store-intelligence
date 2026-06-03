@@ -1,0 +1,35 @@
+{
+  "_comment": "Store 2 entry tripwires (ENTRY-role cameras only). Draw each with pipeline/calibrate.py --mode line: click p1 then p2 ACROSS the door threshold (just inside the glass so foot-points stay visible), then a 3rd point on the store-floor (inside) side. entry 1 and entry 2 are the SAME doorway recorded at DIFFERENT times (different days) -> draw a tripwire on each; their events fall in different windows so they never double-count the same person. Keys are added here when you calibrate them.",
+  "CAM_S2_ENTRY_1": {
+    "p1": [
+      167,
+      544
+    ],
+    "p2": [
+      880,
+      439
+    ],
+    "inside_point": [
+      457,
+      400
+    ],
+    "inside_side": "floor",
+    "min_frames_each_side": 3
+  },
+  "CAM_S2_ENTRY_2": {
+    "p1": [
+      167,
+      506
+    ],
+    "p2": [
+      814,
+      417
+    ],
+    "inside_point": [
+      529,
+      358
+    ],
+    "inside_side": "floor",
+    "min_frames_each_side": 3
+  }
+}

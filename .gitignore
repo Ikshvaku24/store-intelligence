@@ -1,0 +1,47 @@
+# ============================================================================
+# Dataset & video files — per challenge rules, do NOT commit these.
+# Everything under data/ is provided dataset (clips, sample_events, POS,
+# store_layout), extracted frames, model outputs (events*.jsonl, debug_tracks),
+# overlays, or the VLM cache. Keep the folder, ignore its contents.
+# (To ship your authored layout for the reviewer: `git add -f data/store_layout.json`.)
+# ============================================================================
+/data/*
+!/data/.gitkeep
+
+# CCTV footage / frames anywhere (videos + extracted images)
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Model weights (YOLO/OSNet/torchvision downloads)
+*.pt
+*.pth
+*.onnx
+
+# Secrets / env (keep the example)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*.egg-info/
+
+# Databases / logs / scratch
+*.db
+*.sqlite3
+*.log
+smoke.db
+live.db
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/

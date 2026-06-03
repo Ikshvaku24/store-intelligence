@@ -1,0 +1,19 @@
+{
+  "_comment": "Entry tripwire for the ENTRY camera only. p1/p2 are the line endpoints drawn just INSIDE the glass door so foot-points stay visible; inside_point is any pixel known to be inside the store (the wood-floor side) and resolves crossing direction. min_frames_each_side is the K-frame debounce against motion-blur flicker at the dark marble threshold.",
+  "CAM_ENTRY_03": {
+    "p1": [
+      1126,
+      241
+    ],
+    "p2": [
+      806,
+      572
+    ],
+    "inside_point": [
+      864,
+      352
+    ],
+    "inside_side": "wood",
+    "min_frames_each_side": 3
+  }
+}

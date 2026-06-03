@@ -1,0 +1,38 @@
+[
+  {
+    "clip_path": "data/cctv_footage/Store 2/entry 1.mp4",
+    "store_id": "STORE_MUM_1076",
+    "camera_id": "CAM_S2_ENTRY_1",
+    "role": "ENTRY",
+    "start_ts": "2026-03-29T14:09:06Z",
+    "fps": null,
+    "_start_ts_note": "estimate: burnt-in clock read 29/03/2026 19:39:56 IST at ~50s -> start ~19:39:06 IST = 14:09:06Z. VERIFY against the clip's clock; entry 1 and entry 2 are different recording sessions (different days)."
+  },
+  {
+    "clip_path": "data/cctv_footage/Store 2/entry 2.mp4",
+    "store_id": "STORE_MUM_1076",
+    "camera_id": "CAM_S2_ENTRY_2",
+    "role": "ENTRY",
+    "start_ts": "2026-03-08T08:10:00Z",
+    "fps": null,
+    "_start_ts_note": "estimate: burnt-in clock read 08/03/2026 13:40:40 IST at ~40s -> start ~13:40:00 IST = 08:10:00Z. VERIFY."
+  },
+  {
+    "clip_path": "data/cctv_footage/Store 2/zone.mp4",
+    "store_id": "STORE_MUM_1076",
+    "camera_id": "CAM_S2_ZONE",
+    "role": "FLOOR",
+    "start_ts": "2026-03-30T09:57:51Z",
+    "fps": null,
+    "_start_ts_note": "estimate: burnt-in clock ~15:28:41 IST at ~50s -> start ~15:27:51 IST = 09:57:51Z. Date/time uncertain (motion blur) -- VERIFY against the clip's clock."
+  },
+  {
+    "clip_path": "data/cctv_footage/Store 2/billing_area.mp4",
+    "store_id": "STORE_MUM_1076",
+    "camera_id": "CAM_S2_BILL",
+    "role": "BILLING",
+    "start_ts": "2026-03-08T12:57:50Z",
+    "fps": null,
+    "_start_ts_note": "estimate: burnt-in clock read 08/03/2026 18:28:40 IST at ~50s -> start ~18:27:50 IST = 12:57:50Z. VERIFY."
+  }
+]

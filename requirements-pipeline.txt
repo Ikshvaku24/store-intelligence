@@ -1,0 +1,15 @@
+# PROCESS 1 -- offline detection pipeline. Heavy CV deps; never part of the gate.
+ultralytics==8.3.49        # YOLO person detect + ByteTrack tracking
+lap>=0.5.12                # linear assignment for ByteTrack (else ultralytics AutoUpdates mid-run)
+# torch/torchvision: the default Linux PyPI wheels are CUDA-enabled, so they use
+# an NVIDIA GPU automatically when the container has GPU access (see compose file).
+torch>=2.2,<2.6
+torchvision>=0.17
+torchreid==0.2.5           # OSNet appearance embeddings (re-entry)
+opencv-python-headless==4.10.0.84
+shapely==2.0.6             # point-in-polygon + line-crossing geometry
+numpy>=1.26,<2.2
+pydantic==2.10.4           # shared StoreEvent schema (app/models.py)
+pydantic-settings==2.7.1
+pillow>=10.0               # decode VLM staff crops (PIL) for Gemini
+google-genai>=1.0          # Gemini behavioural staff/customer confirmer (Part D)

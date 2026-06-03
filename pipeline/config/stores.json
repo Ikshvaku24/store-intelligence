@@ -1,0 +1,17 @@
+{
+  "_comment": "Registry of stores the pipeline and the Calibration Studio know about. To ADD A STORE: (1) copy pipeline/config/_TEMPLATE to pipeline/config/<your_key> and edit its clips_manifest.json; (2) put that store's videos under footage_dir; (3) draw zones/tripwires (Studio or pipeline/calibrate.py); (4) add an entry below. All paths are relative to the repo root (store-intelligence/).",
+  "stores": {
+    "store_1": {
+      "store_id": "STORE_BLR_002",
+      "config_dir": "pipeline/config/store_1",
+      "footage_dir": "data/cctv_footage/Store 1",
+      "output": "data/events_store1.jsonl"
+    },
+    "store_2": {
+      "store_id": "STORE_MUM_1076",
+      "config_dir": "pipeline/config/store_2",
+      "footage_dir": "data/cctv_footage/Store 2",
+      "output": "data/events_store2.jsonl"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+# The acceptance-gate target: `docker compose up` starts Postgres + API with no
+# manual steps beyond `git clone` and copying `.env`.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: store
+      POSTGRES_PASSWORD: store
+      POSTGRES_DB: store_intelligence
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U store -d store_intelligence"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      DB_URL: postgresql+psycopg://store:store@postgres:5432/store_intelligence
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  # Optional static dashboard (Part E). Polls the API's /metrics endpoint.
+  dashboard:
+    image: python:3.11-slim
+    working_dir: /site
+    command: ["python", "-m", "http.server", "8080"]
+    volumes:
+      - ./dashboard:/site:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

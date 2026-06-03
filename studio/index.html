@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Store Intelligence — Calibration Studio</title>
+<style>
+  :root { --bg:#0f1216; --panel:#171c23; --line:#262d36; --ink:#e6edf3; --mut:#8b97a6; --acc:#4da3ff; --ok:#3fb950; --warn:#d29922; --bad:#f85149; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:16px; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header .sp { flex:1; }
+  select, input, button { font:inherit; color:var(--ink); background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:6px 9px; }
+  button { cursor:pointer; background:#1f2630; }
+  button:hover { border-color:var(--acc); }
+  button.primary { background:var(--acc); color:#04122a; border-color:var(--acc); font-weight:600; }
+  button.danger { border-color:#5a2327; color:#ff9b95; background:#2a181a; }
+  .wrap { display:grid; grid-template-columns:260px 1fr 300px; gap:0; height:calc(100vh - 49px); }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:12px; }
+  aside.right { border-right:0; border-left:1px solid var(--line); }
+  main { overflow:auto; padding:14px; }
+  h2 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--mut); margin:14px 0 8px; }
+  .cam { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; cursor:pointer; }
+  .cam:hover { border-color:var(--acc); }
+  .cam.sel { border-color:var(--acc); background:#14202e; }
+  .cam .r { color:var(--mut); font-size:12px; }
+  .tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:10px; background:#1f2630; color:var(--mut); margin-left:6px; }
+  .tag.entry { background:#102a16; color:#7ee787; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
+  .canvas-host { position:relative; display:inline-block; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#000; }
+  canvas { display:block; cursor:crosshair; }
+  .hint { color:var(--mut); font-size:12px; margin:6px 0; }
+  .zrow { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius:7px; margin-bottom:5px; }
+  .zrow .sw { width:12px; height:12px; border-radius:3px; flex:none; }
+  .zrow .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .zrow .ty { color:var(--mut); font-size:11px; }
+  .form { border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:10px; display:none; }
+  .form.show { display:block; }
+  .form label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
+  .form input[type=text] { width:100%; }
+  .ck { display:inline-flex; align-items:center; gap:5px; margin-right:12px; color:var(--ink); }
+  pre.log { background:#0a0d11; border:1px solid var(--line); border-radius:8px; padding:10px; height:220px; overflow:auto; white-space:pre-wrap; font:12px/1.4 ui-monospace,Consolas,monospace; color:#c9d1d9; }
+  .dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--mut); }
+  .dot.run{background:var(--warn);} .dot.ok{background:var(--ok);} .dot.err{background:var(--bad);}
+  .row { display:flex; gap:8px; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 Calibration Studio</h1>
+  <label class="row">Store <select id="storeSel"></select></label>
+  <label class="row">Frame <select id="frameSel" style="max-width:220px"></select></label>
+  <button id="extractBtn" title="Grab frames from this camera's video (native resolution)">⤵ Extract frames</button>
+  <label class="row" title="seconds between extracted frames">every <input id="everyS" type="number" value="10" min="1" style="width:52px"> s</label>
+  <div class="sp"></div>
+  <span class="hint" id="dims"></span>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: cameras + run -->
+  <aside>
+    <h2>Cameras</h2>
+    <div id="camList"></div>
+
+    <h2>How to use</h2>
+    <ol class="hint" style="padding-left:18px;line-height:1.7">
+      <li>Pick a camera, then <b>⤵ Extract frames</b> from its video.</li>
+      <li>Choose a clear frame in the <b>Frame</b> dropdown.</li>
+      <li>Click points around a shelf to draw a zone; fill the form &amp; <b>Save</b>.</li>
+      <li>Entry cameras: click p1, p2 across the door, then 1 point inside.</li>
+      <li>Run the detection pipeline from the terminal (see README).</li>
+    </ol>
+    <div class="hint" id="exStatus"></div>
+  </aside>
+
+  <!-- CENTER: canvas -->
+  <main>
+    <div class="toolbar">
+      <strong id="camTitle">Pick a camera</strong>
+      <span class="sp" style="flex:1"></span>
+      <span id="modeLabel" class="tag"></span>
+      <button id="undoBtn">↶ Undo point</button>
+      <button id="clearBtn">✕ Clear</button>
+    </div>
+    <div class="hint" id="instr">Select a camera on the left to load its frame.</div>
+    <div class="canvas-host"><canvas id="cv" width="900" height="500"></canvas></div>
+
+    <!-- zone save form -->
+    <div class="form" id="zoneForm">
+      <strong>Save zone</strong>
+      <label>zone_id</label><input id="zId" type="text" placeholder="e.g. S2_Z01">
+      <label>zone_name</label><input id="zName" type="text" placeholder="e.g. Left Wall Shelf">
+      <label>zone_type</label>
+      <select id="zType"><option>SHELF</option><option>DISPLAY</option><option>BILLING</option><option>CONSULT</option><option>OTHER</option></select>
+      <div style="margin-top:10px">
+        <label class="ck"><input type="checkbox" id="zRev" checked> revenue zone</label>
+        <label class="ck"><input type="checkbox" id="zStaff"> staff zone</label>
+        <label class="ck"><input type="checkbox" id="zQueue"> queue zone</label>
+      </div>
+      <div style="margin-top:12px"><button class="primary" id="saveZoneBtn">Save zone</button></div>
+    </div>
+
+    <!-- tripwire save -->
+    <div class="form" id="lineForm">
+      <strong>Save tripwire</strong>
+      <div class="hint">Click 3 points on the frame: <b>p1</b> and <b>p2</b> across the door threshold, then a 3rd point on the <b>store-floor (inside)</b> side.</div>
+      <div style="margin-top:8px"><button class="primary" id="saveLineBtn" disabled>Save tripwire</button></div>
+    </div>
+  </main>
+
+  <!-- RIGHT: existing zones + log -->
+  <aside class="right">
+    <h2>Zones on this camera</h2>
+    <div id="zoneList"><div class="hint">—</div></div>
+  </aside>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let S = { store:null, cam:null, isEntry:false, frames:[], img:null, scale:1, zones:{}, lines:{}, mode:'zone', pts:[] };
+
+const colorFor = z => z.is_staff_zone ? '#f85149' : z.is_queue_zone ? '#4da3ff'
+  : z.zone_type==='DISPLAY' ? '#3fb950' : z.zone_type==='CONSULT' ? '#a371f7' : '#e3a008';
+
+async function jget(u){ const r = await fetch(u); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+async function jsend(u,m,b){ const r = await fetch(u,{method:m,headers:{'content-type':'application/json'},body:b?JSON.stringify(b):null});
+  if(!r.ok) throw new Error((await r.json().catch(()=>({detail:r.statusText}))).detail); return r.json(); }
+
+async function init(){
+  const d = await jget('/api/stores');
+  $('#storeSel').innerHTML = d.stores.map(s=>`<option value="${s.key}">${s.store_id}</option>`).join('');
+  $('#storeSel').onchange = ()=>selectStore($('#storeSel').value);
+  $('#frameSel').onchange = ()=>loadFrame($('#frameSel').value);
+  window._stores = d.stores;
+  selectStore(d.stores[0].key);
+}
+
+function selectStore(key){
+  S.store = key; S.cam=null;
+  const s = window._stores.find(x=>x.key===key);
+  $('#camList').innerHTML = s.cameras.map(c=>`
+    <div class="cam" data-cam="${c.camera_id}">
+      <div>${c.camera_id} ${c.is_entry?'<span class="tag entry">ENTRY</span>':''}</div>
+      <div class="r">${c.role||''} · ${c.n_zones} zones · ${c.n_frames} frames</div>
+    </div>`).join('');
+  document.querySelectorAll('.cam').forEach(el=>el.onclick=()=>selectCamera(el.dataset.cam, el));
+}
+
+async function selectCamera(cam, el){
+  document.querySelectorAll('.cam').forEach(e=>e.classList.remove('sel')); el && el.classList.add('sel');
+  S.cam = cam; S.pts=[];
+  const s = window._stores.find(x=>x.key===S.store);
+  S.isEntry = s.cameras.find(c=>c.camera_id===cam)?.is_entry || false;
+  S.mode = S.isEntry ? 'line' : 'zone';
+  $('#camTitle').textContent = cam;
+  $('#modeLabel').textContent = S.mode==='line' ? 'tripwire mode' : 'zone mode';
+  $('#zoneForm').classList.toggle('show', S.mode==='zone');
+  $('#lineForm').classList.toggle('show', S.mode==='line');
+  $('#instr').textContent = S.mode==='line'
+    ? 'Click p1, p2 across the threshold, then a point on the floor (inside) side.'
+    : 'Click around a shelf/display to add polygon points, then fill the form and Save.';
+  const cfg = await jget(`/api/zones/${S.store}`); S.zones = cfg.zones||{}; S.lines = cfg.lines||{};
+  const fr = await jget(`/api/frames/${S.store}/${cam}`); S.frames = fr.frames;
+  $('#frameSel').innerHTML = S.frames.map(f=>`<option>${f}</option>`).join('') || '<option>(no frames)</option>';
+  if(S.frames.length){ const mid = S.frames[Math.floor(S.frames.length/2)]; $('#frameSel').value = mid; loadFrame(mid); }
+  else { S.img=null; ctx.clearRect(0,0,cv.width,cv.height); }
+  renderZoneList();
+}
+
+function loadFrame(filename){
+  if(!filename || filename.startsWith('(')) return;
+  const img = new Image();
+  img.onload = ()=>{
+    S.img = img;
+    const maxW = 940; S.scale = Math.min(1, maxW/img.naturalWidth);
+    cv.width = Math.round(img.naturalWidth*S.scale); cv.height = Math.round(img.naturalHeight*S.scale);
+    $('#dims').textContent = `frame ${img.naturalWidth}×${img.naturalHeight}px`;
+    S.pts=[]; redraw();
+  };
+  img.src = `/api/frame/${S.store}/${S.cam}/${encodeURIComponent(filename)}`;
+}
+
+cv.onclick = e=>{
+  if(!S.img) return;
+  const r = cv.getBoundingClientRect();
+  const nx = Math.round((e.clientX-r.left)/S.scale), ny = Math.round((e.clientY-r.top)/S.scale);
+  if(S.mode==='line' && S.pts.length>=3) S.pts=[];
+  S.pts.push([nx,ny]);
+  if(S.mode==='line') $('#saveLineBtn').disabled = S.pts.length<3;
+  redraw();
+};
+$('#undoBtn').onclick = ()=>{ S.pts.pop(); redraw(); if(S.mode==='line') $('#saveLineBtn').disabled=S.pts.length<3; };
+$('#clearBtn').onclick = ()=>{ S.pts=[]; redraw(); if(S.mode==='line') $('#saveLineBtn').disabled=true; };
+
+function redraw(){
+  if(!S.img) return;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.drawImage(S.img,0,0,cv.width,cv.height);
+  const sc = ([x,y])=>[x*S.scale,y*S.scale];
+  // existing zones
+  const zc = S.zones[S.cam]||{};
+  for(const [name,z] of Object.entries(zc)){
+    if(typeof z!=='object'||!Array.isArray(z.polygon)||z.polygon.length<3) continue;
+    const col = colorFor(z); ctx.beginPath();
+    z.polygon.forEach((p,i)=>{ const [x,y]=sc(p); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+    ctx.closePath(); ctx.fillStyle=col+'33'; ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+    const c = z.polygon.reduce((a,p)=>[a[0]+p[0],a[1]+p[1]],[0,0]).map(v=>v/z.polygon.length);
+    const [cx,cy]=sc(c); ctx.fillStyle='#fff'; ctx.font='12px system-ui'; ctx.fillText(name,cx-30,cy);
+  }
+  // existing tripwire
+  const ln = S.lines[S.cam];
+  if(ln){ const [a,b,ins]=[sc(ln.p1),sc(ln.p2),sc(ln.inside_point)];
+    ctx.strokeStyle='#f85149'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+    ctx.fillStyle='#f85149'; ctx.beginPath(); ctx.arc(ins[0],ins[1],6,0,7); ctx.fill(); }
+  // in-progress
+  if(S.pts.length){
+    ctx.strokeStyle='#ffd33d'; ctx.fillStyle='#ffd33d'; ctx.lineWidth=2; ctx.beginPath();
+    S.pts.forEach((p,i)=>{ const [x,y]=sc(p); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+    S.pts.forEach((p,i)=>{ const [x,y]=sc(p); ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
+      ctx.fillStyle='#ffd33d'; if(S.mode==='line'){ctx.fillText(['p1','p2','inside'][i]||'',x+6,y-6);} });
+  }
+}
+
+function renderZoneList(){
+  const zc = S.zones[S.cam]||{}; const rows=[];
+  for(const [name,z] of Object.entries(zc)){
+    if(typeof z!=='object'||!Array.isArray(z.polygon)) continue;
+    rows.push(`<div class="zrow"><span class="sw" style="background:${colorFor(z)}"></span>
+      <span class="nm">${name}<div class="ty">${z.zone_type||'?'}${z.is_revenue_zone?' · revenue':''}${z.is_staff_zone?' · staff':''}${z.is_queue_zone?' · queue':''}</div></span>
+      <button class="danger" data-z="${name}">✕</button></div>`);
+  }
+  if(S.lines[S.cam]) rows.unshift(`<div class="zrow"><span class="sw" style="background:#f85149"></span><span class="nm">⊣ tripwire</span></div>`);
+  $('#zoneList').innerHTML = rows.join('') || '<div class="hint">no zones yet</div>';
+  $('#zoneList').querySelectorAll('button[data-z]').forEach(b=>b.onclick=()=>delZone(b.dataset.z));
+}
+
+$('#saveZoneBtn').onclick = async ()=>{
+  if(S.pts.length<3) return alert('Click at least 3 points on the frame first.');
+  const zid = $('#zId').value.trim(); if(!zid) return alert('zone_id required');
+  try{
+    await jsend(`/api/zones/${S.store}`,'POST',{ camera_id:S.cam, zone_id:zid, polygon:S.pts,
+      zone_type:$('#zType').value, zone_name:$('#zName').value.trim()||null,
+      is_revenue_zone:$('#zRev').checked, is_staff_zone:$('#zStaff').checked, is_queue_zone:$('#zQueue').checked });
+    const cfg = await jget(`/api/zones/${S.store}`); S.zones=cfg.zones;
+    S.pts=[]; $('#zId').value=''; $('#zName').value=''; redraw(); renderZoneList();
+  }catch(e){ alert('Save failed: '+e.message); }
+};
+$('#saveLineBtn').onclick = async ()=>{
+  if(S.pts.length<3) return;
+  try{
+    await jsend(`/api/lines/${S.store}`,'POST',{ camera_id:S.cam, p1:S.pts[0], p2:S.pts[1], inside_point:S.pts[2] });
+    const cfg = await jget(`/api/zones/${S.store}`); S.lines=cfg.lines;
+    S.pts=[]; $('#saveLineBtn').disabled=true; redraw(); renderZoneList();
+  }catch(e){ alert('Save failed: '+e.message); }
+};
+async function delZone(z){ if(!confirm('Delete zone '+z+'?')) return;
+  try{ await jsend(`/api/zones/${S.store}/${S.cam}/${encodeURIComponent(z)}`,'DELETE'); const cfg=await jget(`/api/zones/${S.store}`); S.zones=cfg.zones; redraw(); renderZoneList(); }
+  catch(e){ alert(e.message); } }
+
+// extract frames from the selected camera's video (native resolution)
+$('#extractBtn').onclick = async ()=>{
+  if(!S.cam) return alert('Pick a camera on the left first.');
+  const every = Number($('#everyS').value)||10;
+  $('#exStatus').textContent = '⏳ Extracting frames from the video...';
+  try{
+    const r = await jsend(`/api/extract/${S.store}/${S.cam}?every_seconds=${every}`,'POST');
+    S.frames = r.frames;
+    $('#frameSel').innerHTML = S.frames.map(f=>`<option>${f}</option>`).join('');
+    $('#exStatus').textContent = `✓ Extracted ${r.written} frames — pick one and start drawing.`;
+    if(S.frames.length){ const mid=S.frames[Math.floor(S.frames.length/2)]; $('#frameSel').value=mid; loadFrame(mid); }
+  }catch(e){ $('#exStatus').textContent=''; alert('Extract failed: '+e.message); }
+};
+
+init().catch(e=>alert('init failed: '+e.message));
+</script>
+</body>
+</html>

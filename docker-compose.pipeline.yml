@@ -1,0 +1,38 @@
+# Optional: run the offline detection pipeline against the clips in data/.
+# Kept separate from docker-compose.yml so heavy CV deps never touch the gate.
+#
+#   # GPU (NVIDIA, recommended -- needs NVIDIA Container Toolkit / Docker Desktop GPU):
+#   docker compose -f docker-compose.pipeline.yml run --rm -e VID_STRIDE=3 -e WEIGHTS=yolo11m.pt pipeline
+#
+#   # CPU only (slow): override the device
+#   docker compose -f docker-compose.pipeline.yml run --rm -e DEVICE=cpu -e VID_STRIDE=10 -e WEIGHTS=yolo11n.pt pipeline
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pipeline
+    volumes:
+      - ./data:/work/data
+      - ./pipeline/config:/work/pipeline/config
+    # Pass your .env into the container so GEMINI_API_KEY reaches the staff VLM.
+    env_file:
+      - .env
+    environment:
+      # Where events.jsonl is written.
+      OUTPUT_PATH: /work/data/events.jsonl
+      # auto -> use the GPU if visible, else CPU. Override with DEVICE=cpu or DEVICE=0.
+      DEVICE: ${DEVICE:-auto}
+      VID_STRIDE: ${VID_STRIDE:-3}
+      WEIGHTS: ${WEIGHTS:-yolo11m.pt}
+      # explicit passthrough too (covers the case where the key is only in your shell)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    # GPU passthrough (NVIDIA). Harmless to leave on; if no GPU/toolkit is present,
+    # set DEVICE=cpu and the run still works (the reservation is best-effort under
+    # `compose run`). Requires the NVIDIA Container Toolkit on the host.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

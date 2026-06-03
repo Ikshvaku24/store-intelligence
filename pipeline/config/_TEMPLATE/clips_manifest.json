@@ -1,0 +1,30 @@
+[
+  {
+    "_instructions": "ONE object per camera clip. Copy this file to pipeline/config/<your_store>/clips_manifest.json and replace the entries below with your cameras. Delete these _instructions/_example keys (they are ignored, but tidy is better). Fields: clip_path (where the video is), store_id (any string; the API keys off it), camera_id (UNIQUE id you choose, used as the zones.json/lines.json key), role (ENTRY | FLOOR | BILLING | BACKROOM), start_ts (real recording time in ISO-8601 UTC; read it off the burnt-in clock - only affects absolute timestamps + POS correlation), fps (null = read from the video at runtime, recommended; or a number).",
+    "_example_note": "Only ENTRY-role cameras emit ENTRY/EXIT/REENTRY (need a tripwire in lines.json). FLOOR/BILLING/BACKROOM cameras emit ZONE_* / queue events (need polygons in zones.json). BACKROOM is a staff oracle (anyone there = staff)."
+  },
+  {
+    "clip_path": "data/cctv_footage/My Store/entry.mp4",
+    "store_id": "STORE_MY_001",
+    "camera_id": "CAM_ENTRY",
+    "role": "ENTRY",
+    "start_ts": "2026-04-10T14:39:45Z",
+    "fps": null
+  },
+  {
+    "clip_path": "data/cctv_footage/My Store/floor.mp4",
+    "store_id": "STORE_MY_001",
+    "camera_id": "CAM_FLOOR",
+    "role": "FLOOR",
+    "start_ts": "2026-04-10T14:39:45Z",
+    "fps": null
+  },
+  {
+    "clip_path": "data/cctv_footage/My Store/billing.mp4",
+    "store_id": "STORE_MY_001",
+    "camera_id": "CAM_BILL",
+    "role": "BILLING",
+    "start_ts": "2026-04-10T14:39:45Z",
+    "fps": null
+  }
+]

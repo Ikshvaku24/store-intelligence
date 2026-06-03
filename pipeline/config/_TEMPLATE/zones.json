@@ -1,0 +1,15 @@
+{
+  "_comment": "Zone polygons per camera. Keys MUST exactly match the camera_id in clips_manifest.json (a typo = the zone is silently ignored). Each zone: polygon=[[x,y],...] pixel coords on the (distorted) video frame; zone_type=SHELF|DISPLAY|BILLING|CONSULT; is_revenue_zone=true for product zones; is_queue_zone=true for the billing queue lane; is_staff_zone=true for behind-the-counter / backroom; zone_name=human label. Easiest way to fill this is the Calibration Studio (draw on a frame). Camera keys start empty.",
+  "_example": {
+    "CAM_FLOOR": {
+      "LEFT_SHELF": {"polygon": [[120, 80], [620, 90], [610, 540], [110, 530]], "zone_type": "SHELF", "zone_name": "Left Wall Shelf", "is_revenue_zone": true, "is_queue_zone": false, "is_staff_zone": false},
+      "CENTER_DISPLAY": {"polygon": [[700, 300], [950, 300], [950, 560], [700, 560]], "zone_type": "DISPLAY", "zone_name": "Center Display", "is_revenue_zone": true, "is_queue_zone": false, "is_staff_zone": false}
+    },
+    "CAM_BILL": {
+      "BILLING_QUEUE": {"polygon": [[40, 480], [360, 470], [300, 900], [60, 900]], "zone_type": "BILLING", "zone_name": "Billing Queue", "is_revenue_zone": true, "is_queue_zone": true, "is_staff_zone": false},
+      "BILLING_STAFF": {"polygon": [[760, 230], [1180, 240], [1170, 720], [770, 700]], "zone_type": "BILLING", "zone_name": "Behind Counter", "is_revenue_zone": false, "is_queue_zone": false, "is_staff_zone": true}
+    }
+  },
+  "CAM_FLOOR": {},
+  "CAM_BILL": {}
+}
