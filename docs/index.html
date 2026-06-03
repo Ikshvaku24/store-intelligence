@@ -1,0 +1,106 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Store Intelligence - Live Demo</title>
+<style>
+:root{--bg:#0f1117;--card:#171b24;--line:#262d3a;--ink:#e7edf5;--mut:#94a1b2;--acc:#6d7cff;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--rev:#e3a008}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:24px}
+h1{font-size:22px;margin:0 0 2px}.sub{color:var(--mut);margin:0 0 18px;font-size:13px}
+.tabs{display:flex;gap:8px;margin:16px 0}.tab{padding:8px 14px;border:1px solid var(--line);border-radius:9px;background:#10141c;color:var(--ink);cursor:pointer;font-weight:600}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#0a0e18}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi .v{font-size:26px;font-weight:700}.kpi .l{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.card h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.bar{height:26px;border-radius:6px;background:var(--acc);display:flex;align-items:center;padding:0 8px;color:#0a0e18;font-weight:600;white-space:nowrap;min-width:34px}
+.row{display:flex;align-items:center;gap:10px;margin:7px 0}.row .nm{width:150px;color:var(--mut);font-size:13px;flex:none}
+.row .track{flex:1;background:#10141c;border-radius:6px;overflow:hidden}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.INFO{background:#10233a;color:#7cc4ff}.WARN{background:#2a2410;color:#ffd479}.CRITICAL{background:#2a1416;color:#ff9b95}
+.muted{color:var(--mut);font-size:12px}.foot{color:var(--mut);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:14px}
+a{color:var(--acc)}.pill{font-size:11px;border:1px solid var(--line);border-radius:10px;padding:1px 7px;color:var(--mut)}
+</style></head><body><div class="wrap">
+<h1>Store Intelligence &mdash; Live Demo</h1>
+<p class="sub">Real output from the detection pipeline + intelligence API. <span id="meta"></span></p>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+<div class="foot" id="foot"></div>
+</div>
+<script>
+const BAKED = {"stores": [{"key": "store_1", "store_id": "STORE_BLR_002", "metrics": {"store_id": "STORE_BLR_002", "unique_visitors": 27, "visitor_basis": "floor", "conversion_rate": 0.0, "purchases": 0, "avg_dwell_ms_by_zone": {"CONSULT_VANITY_STAFF": 900, "MAKEUP_LIPS": 1338, "FRAGRANCE_TABLE": 13538, "OTHER_SKINCARE_PRODUCTS": 60143, "SUMMER_ESSENTIALS": 1367}, "current_queue_depth": 1, "abandonment_rate": 1.0, "avg_queue_wait_seconds": 0.0, "demographics": {"n_classified": 0, "by_gender": {}, "by_age_bucket": {}}, "groups": {"group_count": 0, "visitors_in_groups": 0, "avg_group_size": 0.0}, "window": {"start": "2026-04-10T14:39:48.480384Z", "end": "2026-04-10T14:42:41.834835Z", "window_min": null}, "generated_at": "2026-06-03T18:21:52.390902Z", "data_confidence": "LOW", "avg_id_confidence": 0.9283}, "funnel": {"store_id": "STORE_BLR_002", "stages": [{"stage": "ENTRY", "count": 27, "drop_off_pct": 0.0}, {"stage": "ZONE_VISIT", "count": 25, "drop_off_pct": 7.41}, {"stage": "BILLING_QUEUE", "count": 2, "drop_off_pct": 92.0}, {"stage": "PURCHASE", "count": 0, "drop_off_pct": 100.0}], "visitor_basis": "floor", "note": "aggregate unique-count funnel; not a per-individual trace (ENTRY stage is floor-derived: no door crossings in this window)", "window": {"start": "2026-04-10T14:39:48.480384Z", "end": "2026-04-10T14:42:41.834835Z", "window_min": null}}, "heatmap": {"store_id": "STORE_BLR_002", "zones": [{"zone_id": "CONSULT_VANITY_STAFF", "visit_count": 13, "avg_dwell_ms": 900, "score_0_100": 100.0}, {"zone_id": "FRAGRANCE_TABLE", "visit_count": 4, "avg_dwell_ms": 13538, "score_0_100": 30.8}, {"zone_id": "MAKEUP_LIPS", "visit_count": 7, "avg_dwell_ms": 1338, "score_0_100": 53.8}, {"zone_id": "OTHER_SKINCARE_PRODUCTS", "visit_count": 2, "avg_dwell_ms": 60143, "score_0_100": 15.4}, {"zone_id": "SUMMER_ESSENTIALS", "visit_count": 2, "avg_dwell_ms": 1367, "score_0_100": 15.4}], "session_count": 0, "data_confidence": "LOW", "window": {"start": "2026-04-10T14:39:48.480384Z", "end": "2026-04-10T14:42:41.834835Z", "window_min": null}}, "anomalies": {"store_id": "STORE_BLR_002", "anomalies": [{"type": "CONVERSION_DROP", "severity": "INFO", "detected_at": "2026-04-10T14:42:41.834835Z", "detail": "Window too short to establish a conversion baseline.", "baseline": "insufficient_history", "suggested_action": "Collect at least 30 minutes of history before trending conversion."}], "window": {"start": "2026-04-10T14:39:48.480384Z", "end": "2026-04-10T14:42:41.834835Z", "window_min": null}}}, {"key": "store_2", "store_id": "STORE_MUM_1076", "metrics": {"store_id": "STORE_MUM_1076", "unique_visitors": 1, "visitor_basis": "entry", "conversion_rate": 0.0, "purchases": 0, "avg_dwell_ms_by_zone": {"S2_Z03": 780}, "current_queue_depth": 1, "abandonment_rate": 0.5, "avg_queue_wait_seconds": 0.0, "demographics": {"n_classified": 0, "by_gender": {}, "by_age_bucket": {}}, "groups": {"group_count": 0, "visitors_in_groups": 0, "avg_group_size": 0.0}, "window": {"start": "2026-03-08T08:10:04.440000Z", "end": "2026-03-30T09:59:21.840000Z", "window_min": null}, "generated_at": "2026-06-03T18:21:52.413053Z", "data_confidence": "OK", "avg_id_confidence": 0.9389}, "funnel": {"store_id": "STORE_MUM_1076", "stages": [{"stage": "ENTRY", "count": 1, "drop_off_pct": 0.0}, {"stage": "ZONE_VISIT", "count": 1, "drop_off_pct": 0.0}, {"stage": "BILLING_QUEUE", "count": 6, "drop_off_pct": 0.0}, {"stage": "PURCHASE", "count": 0, "drop_off_pct": 100.0}], "visitor_basis": "entry", "note": "aggregate unique-count funnel; not a per-individual trace", "window": {"start": "2026-03-08T08:10:04.440000Z", "end": "2026-03-30T09:59:21.840000Z", "window_min": null}}, "heatmap": {"store_id": "STORE_MUM_1076", "zones": [{"zone_id": "S2_Z03", "visit_count": 3, "avg_dwell_ms": 780, "score_0_100": 100.0}], "session_count": 1, "data_confidence": "LOW", "window": {"start": "2026-03-08T08:10:04.440000Z", "end": "2026-03-30T09:59:21.840000Z", "window_min": null}}, "anomalies": {"store_id": "STORE_MUM_1076", "anomalies": [], "window": {"start": "2026-03-08T08:10:04.440000Z", "end": "2026-03-30T09:59:21.840000Z", "window_min": null}}}], "n_events": 423, "health": {"status": "ok", "db": "ok", "stores": [{"store_id": "STORE_BLR_002", "last_event_ts": "2026-04-10T14:42:41.834835Z", "lag_seconds": 4678750.5, "stale_feed": true}, {"store_id": "STORE_MUM_1076", "last_event_ts": "2026-03-30T09:59:21.840000Z", "lag_seconds": 5646150.5, "stale_feed": true}], "version": "1.0.0"}};
+const REPO = "https://github.com/Ikshvaku24/store-intelligence";
+const qApi = new URLSearchParams(location.search).get('api');
+let DATA = BAKED, cur = 0;
+const $=s=>document.querySelector(s);
+const pct=(n)=>Math.max(2,Math.round(n));
+function kpi(v,l){return `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`}
+function render(){
+  const s = DATA.stores[cur]; const m=s.metrics, f=s.funnel, h=s.heatmap, a=s.anomalies;
+  $('#meta').textContent = `${DATA.n_events} events ingested across ${DATA.stores.length} stores`+(qApi?` (live: ${qApi})`:` (snapshot)`);
+  $('#tabs').innerHTML = DATA.stores.map((x,i)=>`<div class="tab ${i==cur?'on':''}" data-i="${i}">${x.store_id}</div>`).join('');
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{cur=+t.dataset.i;render()});
+  const conv=(m.conversion_rate*100).toFixed(1)+'%';
+  let html = `<div class="grid">
+    ${kpi(m.unique_visitors,'Unique visitors')}
+    ${kpi(conv,'Conversion rate')}
+    ${kpi(m.purchases,'Purchases')}
+    ${kpi(m.current_queue_depth,'Queue depth')}
+    ${kpi((m.abandonment_rate*100).toFixed(0)+'%','Queue abandon')}
+  </div>
+  <div class="muted">basis: ${m.visitor_basis} &middot; data confidence: ${m.data_confidence}${m.avg_queue_wait_seconds?` &middot; avg wait ${m.avg_queue_wait_seconds}s`:''}</div>`;
+  // funnel
+  const fmax = Math.max(1,...f.stages.map(s=>s.count));
+  html += `<div class="card"><h3>Conversion funnel</h3>`+
+    f.stages.map(s=>`<div class="row"><div class="nm">${s.stage}${s.drop_off_pct?` <span class="pill">-${s.drop_off_pct}%</span>`:''}</div>
+      <div class="track"><div class="bar" style="width:${pct(100*s.count/fmax)}%">${s.count}</div></div></div>`).join('')+
+    `<div class="muted">${f.note||''}</div></div>`;
+  // zones / heatmap
+  const zs=(h.zones||[]).slice().sort((x,y)=>(y.avg_dwell_ms||0)-(x.avg_dwell_ms||0));
+  if(zs.length){const zmax=Math.max(1,...zs.map(z=>z.avg_dwell_ms||0));
+    html += `<div class="card"><h3>Zone dwell &amp; visits</h3>`+
+    zs.map(z=>`<div class="row"><div class="nm">${z.zone_id}</div>
+      <div class="track"><div class="bar" style="width:${pct(100*(z.avg_dwell_ms||0)/zmax)}%;background:var(--rev)">${((z.avg_dwell_ms||0)/1000).toFixed(1)}s</div></div>
+      <div class="muted" style="width:70px">${z.visit_count} visits</div></div>`).join('')+`</div>`;}
+  // demographics + groups
+  const d=m.demographics||{}, g=m.groups||{};
+  if((d.n_classified||0)||(g.group_count||0)){
+    const gen=Object.entries(d.by_gender||{}).map(([k,v])=>`${k}: ${v}`).join(' &middot; ')||'-';
+    const age=Object.entries(d.by_age_bucket||{}).map(([k,v])=>`${k}: ${v}`).join(' &middot; ')||'-';
+    html += `<div class="card"><h3>Demographics &amp; groups</h3>
+      <div class="row"><div class="nm">Gender</div><div>${gen}</div></div>
+      <div class="row"><div class="nm">Age bucket</div><div>${age}</div></div>
+      <div class="row"><div class="nm">Groups</div><div>${g.group_count||0} groups &middot; ${g.visitors_in_groups||0} in groups &middot; avg size ${g.avg_group_size||0}</div></div></div>`;}
+  // anomalies
+  const al=a.anomalies||a.active||[];
+  html += `<div class="card"><h3>Anomalies</h3>`+
+    (al.length? al.map(x=>`<div class="row"><span class="badge ${x.severity}">${x.severity}</span>
+      <b>${x.type||x.kind}</b><span class="muted">${x.suggested_action||x.detail||''}</span></div>`).join('')
+      :`<div class="muted">No active anomalies in this window.</div>`)+`</div>`;
+  $('#view').innerHTML = html;
+  const hh=DATA.health||{};
+  $('#foot').innerHTML = `API health: <b>${hh.status||'?'}</b> &middot; a real snapshot from a detection-pipeline run; `+
+    `the full live system runs via <code>docker compose up</code> (API + dashboard) with the GPU detection pipeline. `+
+    `Conversion is 0 when the sample POS feed's store_id doesn't match the footage store - the correlation mechanism is built &amp; tested.`+
+    `<div style="margin-top:10px">`+
+    `<a href="${REPO}">GitHub repo</a> &middot; `+
+    `<a href="PRESENTATION.pdf">Slides (PDF)</a> &middot; `+
+    `<a href="${REPO}/blob/master/docs/DESIGN.md">DESIGN.md</a> &middot; `+
+    `<a href="${REPO}/blob/master/docs/CHOICES.md">CHOICES.md</a> &middot; `+
+    `<a href="${REPO}/blob/master/README.md">README</a></div>`;
+}
+async function boot(){
+  if(qApi){ try{
+    const stores = BAKED.stores.map(s=>s.store_id); const out={stores:[],n_events:BAKED.n_events};
+    out.health = await (await fetch(qApi+'/health')).json();
+    for(const sid of stores){ out.stores.push({store_id:sid,
+      metrics:await (await fetch(`${qApi}/stores/${sid}/metrics`)).json(),
+      funnel:await (await fetch(`${qApi}/stores/${sid}/funnel`)).json(),
+      heatmap:await (await fetch(`${qApi}/stores/${sid}/heatmap`)).json(),
+      anomalies:await (await fetch(`${qApi}/stores/${sid}/anomalies`)).json()}); }
+    DATA=out;
+  }catch(e){ console.warn('live fetch failed, using snapshot',e); } }
+  render();
+}
+boot();
+</script></body></html>

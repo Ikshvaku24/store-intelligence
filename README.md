@@ -6,6 +6,10 @@ shop. You point the system at video clips, it detects and tracks people, figures
 where they went and whether they bought anything, and serves it all through a small
 REST API with a live dashboard.
 
+**Live demo:** <https://ikshvaku24.github.io/store-intelligence/> — a snapshot of the
+real analytics output for both stores (funnel, visitors, zone dwell, demographics,
+anomalies). The full live system runs locally via `docker compose up`.
+
 The **North Star** is one number: **offline conversion rate** = visitors who bought ÷
 unique visitors in a time window. Everything in the system either makes that number
 *more accurate* (the detection side) or *more useful* (the API side).
