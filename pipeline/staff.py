@@ -179,13 +179,16 @@ def resolve_staff(
 
         if verdict is not None:
             conf = float(verdict.get("confidence", 0.0) or 0.0)
+            # Carry the VLM's coarse demographics so run_pipeline can stamp them onto
+            # the visitor's events (best-effort; null when the model was unsure).
+            demo = {"gender": verdict.get("gender"), "age_bucket": verdict.get("age_bucket")}
             if verdict.get("is_staff") and conf >= vlm_conf_threshold:
                 staff.add(vid)
                 log.append({"visitor_id": vid, "decision": "staff", "source": "vlm",
-                            "confidence": conf, "reason": verdict.get("reason")})
+                            "confidence": conf, "reason": verdict.get("reason"), **demo})
             else:
                 log.append({"visitor_id": vid, "decision": "customer", "source": "vlm",
-                            "confidence": conf, "reason": verdict.get("reason")})
+                            "confidence": conf, "reason": verdict.get("reason"), **demo})
             continue
 
         if _heuristic_is_staff(evidence, vid):

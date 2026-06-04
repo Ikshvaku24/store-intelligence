@@ -134,3 +134,63 @@ across cameras (`id_token` vs `track_id`), exactly the assumption our aggregate
 funnel was built on. The trade-off: the adapter must track any future field
 additions — but that is one small module, not the graded core. A genuinely
 malformed event still fails per-event validation, so partial-success is preserved.
+
+## Decision 5 — Making the North Star honest: bounded conversion, reconciled abandonment, VLM demographics, and an illustrative POS
+
+**The problem.** On the real footage the headline numbers *read* worse than the
+system actually is. Three things were undercutting the North Star (offline
+conversion): the provided POS feed is for store `ST1008`, which has **no footage**,
+so conversion correlated to nothing and showed `0`; queue abandonment showed `100%`
+even where purchases existed; and the new schema's `demographics`/`groups` blocks
+were empty because the **pipeline never emitted** gender/age/group fields (the API
+already read them).
+
+**What the AI first suggested:** raise the conversion number by loosening the POS
+time-window or counting any billing visitor as converted. We rejected that — it
+fabricates conversions.
+
+**What we chose and why.**
+* **Illustrative POS, clearly labelled.** `scripts/make_demo_pos.py` derives a POS
+  feed for the *footage* store from the billing-zone presences we actually detected
+  (a transaction a few seconds after a non-staff billing visit). It demonstrates the
+  real correlation mechanism end-to-end without inventing customers, and the
+  provided line-item feed is preserved (`data/pos_provided_ST1008.csv`) and still
+  exercised by the schema tests. Conversion on `STORE_BLR_002` becomes a real,
+  modest number rather than a meaningless `0`.
+* **Bounded conversion.** A purchaser is, by definition, a unique visitor, so we fold
+  POS-correlated buyers into the visitor base before dividing. This fixes a genuine
+  bug the POS feed exposed: entry-basis stores can undercount the floor (Store 2's
+  tripwire caught ~1 crossing while billing saw several buyers), which produced a
+  nonsensical **>100%** rate. Now the numerator can never exceed the denominator.
+* **Abandonment reconciled against POS.** A visitor who is POS-correlated as
+  *converted* did not abandon the queue — the queue-exit was a completed purchase the
+  camera couldn't see. Removing converted visitors from the abandoner set ends the
+  "100% abandonment alongside N purchases" contradiction.
+* **Demographics for free from the VLM we already call.** The staff classifier makes
+  one Gemini call per person; we extended *that same call* (no extra requests) to also
+  return a coarse `gender`/`age_bucket`, stamped onto the visitor's events so the
+  `demographics` block populates. Faces are blurred, so this is explicitly
+  **best-effort** — the model returns `null`/`U` when unsure and we never force a
+  guess.
+* **Conservative group detection.** `pipeline/groups.py` forms a group only from
+  non-staff people who were *first seen together* (within seconds) **and** overlapped
+  in dwell on a shared camera, capped at size 2–4 — a floor-wide cluster is treated as
+  noise and dropped, so a bad run degrades to *no* groups rather than one giant fake
+  one.
+
+* **VLM as a dedup tie-breaker, not a sledgehammer.** Visitor dedup is the weakest
+  link (appearance Re-ID is poor on blurred, black-on-black, cross-angle footage). We
+  let the VLM vet only the **borderline embedding band** `[0.74, 0.82)`: pairs the
+  strict cosine threshold would miss merge *only* if a VLM same-person check confirms
+  at high confidence; confident pairs (`>= 0.82`) merge without a call, and the
+  provably-different block (same camera, overlapping time) always wins first. This
+  raises recall without the blind false-merges of simply lowering the threshold, is
+  capped/cached, and **degrades to embedding-only** with no key. We were deliberately
+  conservative — a wrong "same" merges two people — so this is a gated, flagged
+  enhancement, not a number we lean on.
+
+The trade-off across all six: every enriched number (conversion, demographics, groups)
+and the VLM-assisted merge is **approximate on this footage and flagged as such**
+(`data_confidence`, the "illustrative POS" label, the best-effort demographics note,
+the conservative dedup band). We preferred an honest, bounded, populated metric over
+an impressive-looking one — the brief rewards exactly that judgement.

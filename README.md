@@ -27,6 +27,7 @@ From a handful of CCTV clips per store, the system answers questions like:
 | Which zones get attention but no sales? | `/heatmap` dwell vs `/funnel` billing stage |
 | Is a billing queue building up right now? | `/anomalies` → `BILLING_QUEUE_SPIKE` |
 | Is conversion worse than usual today? | `/anomalies` → `CONVERSION_DROP` |
+| Who shops here, and do they come in groups? | `/metrics` → `demographics` (gender/age), `groups` |
 | Is a camera feed stale / down? | `/health` → `STALE_FEED` |
 
 It also handles the messy realities of real footage: people entering in **groups**
@@ -69,7 +70,7 @@ app/                FastAPI service (Process 2, graded): models, normalize (sche
                     adapter), db, ingestion, metrics, funnel, heatmap, anomalies,
                     pos, health, logging middleware
 pipeline/           Detection pipeline (Process 1): detect, reid, geometry, sessions,
-                    staff, vlm_staff, dedup, emit, run_pipeline, calibrate
+                    staff, vlm_staff, dedup, groups, emit, run_pipeline, calibrate
   config/           Per-store calibration: store_1/, store_2/, _TEMPLATE/ (copy to
                     add a store), stores.json (registry). Each store folder holds
                     clips_manifest.json, zones.json, lines.json
@@ -78,7 +79,8 @@ dashboard/          replay.py (event streamer) + index.html (live counter)
 tests/              pytest suite (API + pipeline) with AI prompt blocks
 docs/               DESIGN.md, CHOICES.md, PRESENTATION.pdf
 docker/             Dockerfile.api (slim, the gate) + Dockerfile.pipeline (heavy)
-scripts/            generate_sample_data.py, build_store_layout.py, make_presentation.py
+scripts/            generate_sample_data.py, make_demo_pos.py (illustrative POS),
+                    build_store_layout.py, build_demo.py, make_presentation.py
 data/               (git-ignored) videos, frames, events, POS, layout
 ```
 
@@ -227,7 +229,9 @@ docker compose -f docker-compose.pipeline.yml run --rm \
   -e ZONES=pipeline/config/store_1/zones.json \
   -e LINES=pipeline/config/store_1/lines.json \
   -e OUTPUT_PATH=data/events_store1.jsonl \
-  -e VID_STRIDE=3 -e VLM_MIN_INTERVAL_S=0.4 -e VLM_MAX_CALLS=0 pipeline
+  -e VID_STRIDE=3 -e REID_DEDUP_THRESHOLD=0.82 \
+  -e REID_DEDUP_LOW=0.7 -e VLM_DEDUP_CONF=0.8 -e VLM_DEDUP_MAX_PAIRS=80 \
+-e VLM_MIN_INTERVAL_S=0.08 -e VLM_MAX_CALLS=0 pipeline
 
 # Store 2 (its own config) -> data/events_store2.jsonl
 docker compose -f docker-compose.pipeline.yml run --rm \
@@ -235,7 +239,9 @@ docker compose -f docker-compose.pipeline.yml run --rm \
   -e ZONES=pipeline/config/store_2/zones.json \
   -e LINES=pipeline/config/store_2/lines.json \
   -e OUTPUT_PATH=data/events_store2.jsonl \
-  -e VID_STRIDE=3 -e VLM_MIN_INTERVAL_S=0.4 -e VLM_MAX_CALLS=0 pipeline
+  -e VID_STRIDE=3 -e REID_DEDUP_THRESHOLD=0.82 \
+  -e REID_DEDUP_LOW=0.7 -e VLM_DEDUP_CONF=0.8 -e VLM_DEDUP_MAX_PAIRS=80 \
+-e VLM_MIN_INTERVAL_S=0.08 -e VLM_MAX_CALLS=0 pipeline
 ```
 
 **Watch the log** — it should show, per clip, a progress line every 200 frames, then
@@ -244,10 +250,18 @@ after all clips:
 ```
 [reid] embedding backend: mobilenet_v3_small (device cuda)   ← appearance dedup is alive
 ...
+Dedup VLM tie-breaker: 6 borderline merge(s) confirmed of 23 pair(s) asked (band [0.74, 0.82))
 Dedup: 142 tokens -> 11 people (threshold 0.82); relabeled ... events
 Staff resolved: 2 staff visitor(s) (by source: {'vlm': 1, 'position': 1}); ...
+Demographics: stamped 9 visitor(s) (...); Groups: 2 group(s) over 5 visitor(s) (...)
 Wrote 318 events to data/events_store1.jsonl
 ```
+
+The same per-person Gemini call powers staff, demographics, and the dedup tie-breaker;
+all three need a `GEMINI_API_KEY` in the container (`VLM=on` in the log) and degrade
+gracefully without one. **Delete `data/vlm_staff_cache.json` before a re-run** so the
+new demographics prompt is used (visitor ids are minted fresh each run, so the cache is
+cold across runs anyway — this just guarantees it).
 
 > **On Windows PowerShell**, replace the trailing `\` line-continuations with a backtick `` ` ``.
 
@@ -258,14 +272,28 @@ Wrote 318 events to data/events_store1.jsonl
 Get-Content data\events_store1.jsonl, data\events_store2.jsonl | Set-Content -Encoding utf8 data\events.jsonl
 #   (bash:  cat data/events_store1.jsonl data/events_store2.jsonl > data/events.jsonl)
 
-docker compose down -v          # reset the DB so only this run counts
-docker compose up -d --build
+# Conversion needs a POS feed whose store_id matches the footage store. If you have a
+# real one, drop it in data/pos_transactions.csv (store_id, transaction_id, timestamp,
+# basket_value_inr  — or the hackathon line-item format, auto-detected). If not, derive
+# an illustrative one from the billing visits you just detected (clearly a stand-in):
+python scripts/make_demo_pos.py --convert 1.0    # -> data/pos_transactions.csv
+
+docker compose down -v          # reset the DB so only this run counts (counts inflate otherwise)
+docker compose up -d --build    # rebuilds the API → bakes the new POS + loads it at startup
 
 python dashboard/replay.py --events data/events.jsonl --api http://localhost:8000 --speed 20
 
 curl http://localhost:8000/stores/STORE_BLR_002/metrics
 curl http://localhost:8000/stores/STORE_MUM_1076/metrics
 ```
+
+`/metrics` returns the North-Star block plus the new-schema extras the pipeline now
+emits: `conversion_rate` (POS-correlated, **bounded ≤ 1.0** — a purchaser is folded
+into the unique base), `abandonment_rate` (POS-reconciled — a buyer is not also an
+abandoner), `demographics` (coarse `gender`/`age_bucket` from the staff VLM call),
+`groups` (co-arrival group sizes), and `avg_dwell_ms_by_zone`. Demographics/groups are
+populated by the pipeline run; they stay empty if you ingest events that predate these
+fields or run with `--no-vlm`.
 
 Open the **dashboard** at <http://localhost:8080> while the replay runs to watch the
 visitor and conversion counters update live.
@@ -314,11 +342,19 @@ All knobs are environment variables (pass with `-e` on the pipeline `run`, or in
 | `VID_STRIDE` | Process every Nth frame (higher = faster, coarser) | `1` (use `3`–`8`) |
 | `DEVICE` | `auto` / `cpu` / `0` (GPU index) | `auto` |
 | `WEIGHTS` | YOLO weights (`yolo11m.pt`, `yolo11n.pt` for speed) | `yolo11m.pt` |
-| `REID_DEDUP_THRESHOLD` | Merge visitor tokens with embedding cosine ≥ this | `0.82` |
+| `REID_DEDUP_THRESHOLD` | Auto-merge visitor tokens with embedding cosine ≥ this | `0.82` |
+| `REID_DEDUP_LOW` | Floor of the **VLM-vetted** borderline band `[low, threshold)`; pairs here merge only if the VLM confirms same-person | `0.74` |
+| `VLM_DEDUP_CONF` / `VLM_DEDUP_MAX_PAIRS` | Min confidence to confirm a borderline merge / cap on borderline pairs sent to the VLM | `0.8` / `80` |
 | `VLM_STAFF_CONF` | Min VLM confidence to mark someone staff | `0.75` |
 | `VLM_MIN_INTERVAL_S` / `VLM_MAX_CALLS` | Gemini rate limit (set `0.4`/`0` on a paid tier) | `6.5` / `50` |
 | `GEMINI_MODEL` | VLM model id | `gemini-2.5-flash` |
-| `--no-vlm` (flag) | Skip the VLM staff confirmer entirely (instant) | off |
+| `--no-vlm` (flag) | Skip ALL VLM calls (staff + demographics + dedup tie-breaker) | off |
+
+The same per-person Gemini call drives three things — staff classification, coarse
+**demographics** (`gender`/`age_bucket`), and the **dedup tie-breaker** — so on a paid
+tier set `VLM_MAX_CALLS=0` (unlimited) or staff calls can exhaust the budget before
+dedup. With no `GEMINI_API_KEY` the pipeline still runs: staff falls back to
+position+heuristic, demographics stays empty, and dedup is embedding-only.
 
 Per-store config selection is via `MANIFEST` / `ZONES` / `LINES` / `OUTPUT_PATH`.
 
@@ -381,9 +417,10 @@ pytest                              # ephemeral SQLite, no server needed
 |---|---|
 | **`events_store1/2.jsonl` not created** | You appended `python -m pipeline.run_pipeline …` after `pipeline`. The image entrypoint is `run.sh`, which selects config via **env vars** — use the Step 5 commands (`-e MANIFEST=… -e OUTPUT_PATH=…`), don't append a python command. |
 | **Run looks "stuck" after the clips** | It's the post-run staff phase making throttled Gemini calls (CPU near 0% = waiting on the network). Watch for `[vlm] call N` ticks. On a paid tier add `-e VLM_MIN_INTERVAL_S=0.4 -e VLM_MAX_CALLS=0`, or `--no-vlm` to skip. |
-| **No `Dedup: N -> M` line / too many unique visitors** | Appearance dedup needs embeddings. Confirm the log shows `[reid] embedding backend: mobilenet_v3_small`. If it says `backend: none`, torch/torchvision didn't load in the image (rebuild). Tune `REID_DEDUP_THRESHOLD` — lower (0.75) merges more, higher (0.90) merges less. |
+| **No `Dedup: N -> M` line / too many unique visitors** | Appearance dedup needs embeddings. Confirm the log shows `[reid] embedding backend: mobilenet_v3_small`. If it says `backend: none`, torch/torchvision didn't load in the image (rebuild). Tune `REID_DEDUP_THRESHOLD` — lower (0.75) merges more, higher (0.90) merges less. With a key, the VLM also vets the `[REID_DEDUP_LOW, threshold)` band (`Dedup VLM tie-breaker: K of N` in the log). If unique drops *too* low (over-merge), raise `VLM_DEDUP_CONF` (0.85–0.9) or lower `VLM_DEDUP_MAX_PAIRS`. |
 | **Too many / too few staff** | Raise `VLM_STAFF_CONF` (e.g. 0.85) to flag fewer; lower (0.65) to flag more. `VLM=off` in the log means the Gemini key didn't reach the container — check `.env`. |
-| **`conversion_rate` is 0** | POS correlation matches on **store_id + time window**. The `store_id` in `pos_transactions.csv` must match the store you're querying, and timestamps must be on the same clock as the events. Mismatched store_id → 0 (correct, not a bug). |
+| **`conversion_rate` is 0** | POS correlation matches on **store_id + time window**. The `store_id` in `pos_transactions.csv` must match the store you're querying, and timestamps must be on the same clock as the events. The hackathon-provided POS is for a store with no footage → 0 (correct, not a bug); run `python scripts/make_demo_pos.py` to derive an illustrative feed for the footage store, then `docker compose up -d --build` (the API bakes + loads POS at startup). |
+| **`demographics` / `groups` are empty** | These come from the pipeline run: demographics needs the VLM (`VLM=on`; runs degrade to empty without a key), groups need ≥2 people co-arriving. Events ingested from before this feature won't have them — re-run the pipeline, clearing `data/vlm_staff_cache.json` first so the new demographics prompt is used. |
 | **429 / rate limit from Gemini** | Free tier is ~10 req/min. Keep the default throttle, or upgrade and set `VLM_MIN_INTERVAL_S=0.4 VLM_MAX_CALLS=0`. |
 | **Studio "Extract" returns 501** | `pip install -r requirements-studio.txt` (OpenCV missing in the studio env). |
 | **Zones don't line up / no zone events** | Draw on frames extracted by the Studio (native resolution). Frames from another tool at a different resolution will be offset. |
@@ -399,8 +436,17 @@ pytest                              # ephemeral SQLite, no server needed
   flagged with a confidence, never used to gate the headline visitor count.
 - The funnel is an **aggregate** unique-count funnel, not a per-individual trace.
 - Queue depth in a tight billing area is reported as a flagged trend, not an exact head-count.
-- Conversion needs a POS feed whose `store_id` matches the footage; with a mismatched
-  feed it correctly reports 0.
+- Conversion needs a POS feed whose `store_id` matches the footage. The provided feed is
+  for a non-footage store, so `scripts/make_demo_pos.py` derives an **illustrative**
+  stand-in from detected billing visits — it demonstrates the real correlation
+  mechanism, it is not ground-truth sales.
+- **Demographics** (`gender`/`age_bucket`) are a **coarse, best-effort** VLM guess on
+  blurred footage — the model returns null when unsure and we never force a guess.
+- **Groups** are inferred from co-arrival + shared-camera overlap (size 2–4); a
+  floor-wide cluster is dropped as noise, so the count is conservative.
+- The **VLM dedup tie-breaker** only vets the borderline embedding band and can still
+  mis-merge two similarly-dressed people on this footage; it is capped, flagged, and
+  never overrides the provably-different (same-camera-overlap) block.
 
-See [docs/DESIGN.md](docs/DESIGN.md) §7 and [docs/CHOICES.md](docs/CHOICES.md) for the
-full reasoning and trade-offs.
+See [docs/DESIGN.md](docs/DESIGN.md) §7 & §10 and [docs/CHOICES.md](docs/CHOICES.md)
+Decisions 4–5 for the full reasoning and trade-offs.

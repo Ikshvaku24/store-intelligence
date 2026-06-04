@@ -48,10 +48,36 @@ PROMPT = (
     "CUSTOMER (default): browses or picks products for themselves; carries a shopping "
     "bag/handbag; is the one being served / having makeup applied; or the role is "
     "unclear.\n\n"
+    "ALSO estimate coarse demographics from build, hair, clothing and posture (faces "
+    "are blurred, so this is a best-effort guess -- use \"U\" / null when you cannot "
+    "tell, do NOT force a guess):\n"
+    "  gender: one of \"M\", \"F\", or \"U\" (unknown).\n"
+    "  age_bucket: one of \"0-17\", \"18-24\", \"25-34\", \"35-44\", \"45-54\", \"55+\", "
+    "or null.\n\n"
     "The frames are crops of the SAME person over time. Context: {context}.\n"
     "Set confidence > 0.8 ONLY when the staff role is obvious; use low confidence "
     "when unsure. Respond with STRICT JSON only, no prose: "
-    '{{"is_staff": true|false, "confidence": 0.0-1.0, "reason": "<short>"}}'
+    '{{"is_staff": true|false, "confidence": 0.0-1.0, "reason": "<short>", '
+    '"gender": "M|F|U", "age_bucket": "25-34|null"}}'
+)
+
+# Allowed demographic values (anything else from the model is dropped, not trusted).
+_GENDERS = {"M", "F"}
+_AGE_BUCKETS = {"0-17", "18-24", "25-34", "35-44", "45-54", "55+"}
+
+# Borderline Re-ID confirmer (used by visitor dedup for ambiguous embedding pairs).
+SAME_PERSON_PROMPT = (
+    "You are comparing two sets of CCTV crops from a cosmetics store. Faces are "
+    "blurred. SET A is one tracked person; SET B is another track -- possibly the SAME "
+    "physical person (seen on another camera/angle, or after a tracking break) or a "
+    "DIFFERENT person.\n"
+    "Decide if A and B are the SAME individual using build, hair, skin tone, clothing "
+    "(colour/cut/print), bag and footwear. Black clothing is very common here, so do "
+    "NOT answer SAME on dark clothing alone -- require SEVERAL matching cues.\n"
+    "DEFAULT TO DIFFERENT when unsure (a wrong merge collapses two people). Context: "
+    "{context}.\n"
+    "Respond with STRICT JSON only, no prose: "
+    '{{"same": true|false, "confidence": 0.0-1.0, "reason": "<short>"}}'
 )
 
 
@@ -107,7 +133,7 @@ class GeminiStaffClassifier:
 
             images = [Image.open(BytesIO(b)).convert("RGB") for b in crops_jpeg[:6]]
             prompt = PROMPT.format(context=json.dumps(context))
-            text = self._generate(prompt, images)
+            text = self._generate([prompt, *images])
             verdict = _parse_verdict(text or "")
         except Exception:  # noqa: BLE001 - network/parse failure -> no verdict
             return None
@@ -120,11 +146,47 @@ class GeminiStaffClassifier:
         return verdict
 
     # ------------------------------------------------------------------ #
-    def _generate(self, prompt: str, images: list[Any]) -> Optional[str]:
+    def same_person(
+        self,
+        pair_key: str,
+        crops_a: list[bytes],
+        crops_b: list[bytes],
+        context: dict[str, Any],
+    ) -> Optional[dict[str, Any]]:
+        """Return {same, confidence, reason} for two visitor tokens, or None.
+
+        Used by visitor dedup to vet ambiguous embedding pairs. Cached per pair
+        (``PAIR::`` keys share the staff cache); respects the same throttle + budget."""
+        if pair_key in self._cache:
+            return self._cache[pair_key]
+        if not self.available or not crops_a or not crops_b:
+            return None
+        if self.max_calls and self._calls >= self.max_calls:
+            return None
+        try:
+            from PIL import Image  # lazy
+
+            imgs_a = [Image.open(BytesIO(b)).convert("RGB") for b in crops_a[:3]]
+            imgs_b = [Image.open(BytesIO(b)).convert("RGB") for b in crops_b[:3]]
+            prompt = SAME_PERSON_PROMPT.format(context=json.dumps(context))
+            text = self._generate([prompt, "SET A:", *imgs_a, "SET B:", *imgs_b])
+            verdict = _parse_same(text or "")
+        except Exception:  # noqa: BLE001 - network/parse failure -> no verdict
+            return None
+        if verdict is None:
+            return None
+        verdict["source"] = "vlm"
+        self._cache[pair_key] = verdict
+        self._save_cache()
+        return verdict
+
+    # ------------------------------------------------------------------ #
+    def _generate(self, contents: list[Any]) -> Optional[str]:
         """Call Gemini with free-tier throttling + 429 backoff. Returns reply text.
 
-        Raises on a non-rate-limit error (caught by ``classify``); returns None if
-        the rate limit can't be cleared within ``max_retries``."""
+        ``contents`` is the raw parts list (prompt strings + PIL images). Raises on a
+        non-rate-limit error (caught by the caller); returns None if the rate limit
+        can't be cleared within ``max_retries``."""
         for attempt in range(self.max_retries + 1):
             # Throttle: keep at least ``min_interval`` seconds between calls.
             wait = self.min_interval - (time.monotonic() - self._last_call)
@@ -137,7 +199,7 @@ class GeminiStaffClassifier:
                       f"{f'/{self.max_calls}' if self.max_calls else ''} "
                       f"(model {self.model_name})...", flush=True)
                 resp = self._client.models.generate_content(
-                    model=self.model_name, contents=[prompt, *images]
+                    model=self.model_name, contents=contents
                 )
                 return getattr(resp, "text", "") or ""
             except Exception as exc:  # noqa: BLE001
@@ -189,6 +251,24 @@ def _retry_delay(exc: Exception) -> Optional[float]:
     return None
 
 
+def _parse_same(text: str) -> Optional[dict[str, Any]]:
+    """Extract the same-person JSON ({same, confidence, reason}) from a reply."""
+    text = text.strip()
+    if "{" in text and "}" in text:
+        text = text[text.index("{"): text.rindex("}") + 1]
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if "same" not in obj:
+        return None
+    return {
+        "same": bool(obj.get("same")),
+        "confidence": float(obj.get("confidence", 0.0) or 0.0),
+        "reason": str(obj.get("reason", ""))[:200],
+    }
+
+
 def _parse_verdict(text: str) -> Optional[dict[str, Any]]:
     """Extract the JSON object from a model reply, tolerating ``` fences."""
     text = text.strip()
@@ -200,8 +280,14 @@ def _parse_verdict(text: str) -> Optional[dict[str, Any]]:
         return None
     if "is_staff" not in obj:
         return None
+    # Coarse demographics are best-effort on blurred footage: keep only recognised
+    # values, otherwise leave null so the API simply doesn't count that person.
+    gender = str(obj.get("gender", "") or "").strip().upper()[:1]
+    age = str(obj.get("age_bucket", "") or "").strip()
     return {
         "is_staff": bool(obj.get("is_staff")),
         "confidence": float(obj.get("confidence", 0.0) or 0.0),
         "reason": str(obj.get("reason", ""))[:200],
+        "gender": gender if gender in _GENDERS else None,
+        "age_bucket": age if age in _AGE_BUCKETS else None,
     }

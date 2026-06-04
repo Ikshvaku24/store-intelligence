@@ -185,3 +185,36 @@ queue_completed/abandoned (`queue_join_ts`/`served_ts`/`exit_ts`, `wait_seconds`
   now read from the video at runtime (manifest value optional), removing the
   hand-measured-fps error class. Zones are drawn from the **layout planograms**,
   carrying `zone_type`/`is_revenue_zone` into events to match the graders' schema.
+
+## 10. Closing the loop on the North Star (conversion, demographics, groups)
+
+The detection pipeline and the API meet at the `StoreEvent` schema, but a few
+query-time metrics were only as good as the fields the pipeline emitted. Three
+additions close that gap:
+
+* **Conversion is now bounded and demonstrable.** Conversion correlates billing-zone
+  presence to POS transactions by time window (no identity). Because the provided POS
+  feed is for a store with no footage, `scripts/make_demo_pos.py` generates an
+  *illustrative* feed for the footage store from the billing presences we detected, so
+  the mechanism is shown end-to-end. The denominator now includes POS-confirmed buyers
+  (a purchaser is a visitor), so the rate can never exceed 100% even when entry-basis
+  undercounts the floor; and a visitor who purchased is no longer also counted as a
+  queue abandoner.
+
+* **Demographics ride the staff VLM call.** Staff resolution already issues one Gemini
+  vision call per person. That call now also returns a coarse `gender`/`age_bucket`
+  (best-effort — faces are blurred, so `null`/`U` is allowed and never forced), mapped
+  through the dedup relabel onto the canonical visitor and stamped into event metadata.
+  The API's `demographics` block reads those keys over the unique-visitor base, so it
+  can't double-count a person across their per-camera tracks.
+
+* **Groups from co-arrival.** `pipeline/groups.py` forms a group only from non-staff
+  visitors first seen within seconds of each other **and** overlapping in dwell on a
+  shared camera (size 2–4; floor-wide clusters dropped as noise). It runs purely on
+  event timestamps — no extra model — and degrades to *no* groups rather than a fake
+  giant one.
+
+All three are approximate on this footage and surfaced as such; the design choice is
+to populate and **flag** them rather than leave the blocks empty or print an
+unjustified number. Each is additive — the schema, the six endpoints, and the
+acceptance gate are unchanged.

@@ -167,16 +167,24 @@ def current_queue_depth(events: list[dict[str, Any]]) -> int:
     return int(depth) if depth is not None else 0
 
 
-def abandonment_rate(events: list[dict[str, Any]]) -> float:
+def abandonment_rate(
+    events: list[dict[str, Any]], converted: Optional[set[str]] = None
+) -> float:
     # An abandon is itself proof the visitor joined the queue. In the new schema a
     # ``queue_abandoned`` event maps to a single ABANDON row (no separate JOIN), so
     # the joiner base is the union JOIN ∪ ABANDON. For legacy data (which emits both
     # for an abandoner) the union is identical, so this stays back-compatible.
+    #
+    # A visitor who is POS-correlated as *converted* did not really abandon -- the
+    # queue-exit was a completed purchase the pipeline couldn't see. Reconciling
+    # against ``converted`` removes the "100% abandonment alongside N purchases"
+    # contradiction (back-compatible: ``converted`` defaults to empty).
+    converted = converted or set()
     abandoners = {
         e["visitor_id"]
         for e in events
         if e["event_type"] == "BILLING_QUEUE_ABANDON" and not e.get("is_staff")
-    }
+    } - converted
     joiners = abandoners | {
         e["visitor_id"]
         for e in events
@@ -201,9 +209,15 @@ def compute_metrics(store_id: str, window_min: Optional[int] = None) -> dict[str
     events = db.fetch_events(store_id, start, end, include_staff=False)
 
     base, basis = visitor_base(events)
-    uv = len(base)
     conv = pos.correlate_conversions(store_id, start, end)
     converted = conv["converted_visitors"]
+    # A purchaser is, by definition, a unique visitor. Fold POS-correlated buyers into
+    # the visitor base so the North Star numerator can never exceed its denominator:
+    # entry-basis can undercount the floor (e.g. Store 2's tripwire caught ~1 crossing
+    # while billing saw several buyers), which would otherwise yield a >100% rate. This
+    # also guarantees a confirmed buyer is never dropped from the unique count.
+    base = base | converted
+    uv = len(base)
     conversion_rate = round(len(converted) / uv, 4) if uv else 0.0
 
     if uv == 0:
@@ -222,7 +236,7 @@ def compute_metrics(store_id: str, window_min: Optional[int] = None) -> dict[str
         "purchases": conv["purchase_count"],
         "avg_dwell_ms_by_zone": avg_dwell_by_zone(events),
         "current_queue_depth": current_queue_depth(events),
-        "abandonment_rate": abandonment_rate(events),
+        "abandonment_rate": abandonment_rate(events, converted),
         "avg_queue_wait_seconds": avg_queue_wait_seconds(events),
         "demographics": demographics(events, base),
         "groups": group_stats(events, base),

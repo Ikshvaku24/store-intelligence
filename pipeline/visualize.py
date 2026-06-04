@@ -57,9 +57,10 @@ def annotate(camera_id, clip, zones, line, out_dir, interval_s, weights, device,
     import numpy as np
 
     from pipeline import detect
+    from pipeline.run_pipeline import _clip_fps
 
     os.makedirs(out_dir, exist_ok=True)
-    fps = float(clip["fps"])
+    fps = _clip_fps(clip)  # manifest value, or read from the video when null (Store 2)
     role = clip["role"]
     zone_polys = {n: c["polygon"] for n, c in zones.items()}
     staff_zone_names = {n for n, c in zones.items() if c.get("is_staff_zone")}
@@ -126,8 +127,10 @@ def overlay(camera_id, clip, zones, rows_for_cam, out_dir, interval_s):
     import cv2
     import numpy as np
 
+    from pipeline.run_pipeline import _clip_fps
+
     os.makedirs(out_dir, exist_ok=True)
-    fps = float(clip["fps"])
+    fps = _clip_fps(clip)  # manifest value, or read from the video when null (Store 2)
     role = clip["role"]
     zone_polys = {n: c["polygon"] for n, c in zones.items()}
     staff_zone_names = {n for n, c in zones.items() if c.get("is_staff_zone")}

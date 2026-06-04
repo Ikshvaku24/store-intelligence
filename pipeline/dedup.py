@@ -14,7 +14,7 @@ people. Pure-Python so it is unit-testable without torch.
 from __future__ import annotations
 
 import math
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -32,6 +32,8 @@ def build_merge_map(
     embeddings: dict[str, list[float]],
     blocked_pairs: Optional[Iterable[tuple[str, str]]] = None,
     threshold: float = 0.82,
+    low_threshold: Optional[float] = None,
+    confirm: Optional[Callable[[str, str], bool]] = None,
 ) -> dict[str, str]:
     """Return ``{visitor_id -> canonical_visitor_id}`` collapsing duplicates.
 
@@ -39,8 +41,19 @@ def build_merge_map(
     ``blocked_pairs`` couple in the same group. Canonical id = lexicographically
     smallest token in each group (deterministic). Tokens never merged map to
     themselves.
+
+    **VLM-gated borderline band (optional).** When ``confirm`` is given and
+    ``low_threshold < threshold``, pairs whose cosine falls in
+    ``[low_threshold, threshold)`` are *ambiguous*: they merge ONLY if ``confirm(a, b)``
+    returns True (a behavioural same-person check). Pairs ``>= threshold`` still merge
+    automatically; pairs ``< low_threshold`` never merge. With ``confirm=None`` this is
+    exactly the embedding-only behaviour (only ``>= threshold`` merges), so dedup
+    degrades gracefully when no VLM is available. ``confirm`` is called lazily — only
+    for borderline pairs that still need a decision (after the block + already-merged
+    checks) — to keep the number of VLM calls small.
     """
     ids = list(embeddings)
+    low = low_threshold if (low_threshold is not None and confirm is not None) else threshold
     blocked = set()
     for a, b in (blocked_pairs or ()):
         blocked.add((a, b))
@@ -64,16 +77,19 @@ def build_merge_map(
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
             s = cosine(embeddings[ids[i]], embeddings[ids[j]])
-            if s >= threshold:
-                candidates.append((s, ids[i], ids[j]))
+            if s >= low:
+                # auto-merge band vs VLM-gated borderline band
+                candidates.append((s, ids[i], ids[j], s >= threshold))
     candidates.sort(key=lambda c: c[0], reverse=True)
 
-    for _s, a, b in candidates:
+    for _s, a, b, auto in candidates:
         ra, rb = find(a), find(b)
         if ra == rb:
             continue
         if blocked_between(members[ra], members[rb]):
             continue
+        if not auto and not (confirm and confirm(a, b)):
+            continue  # borderline pair the VLM did not confirm
         parent[rb] = ra
         members[ra] |= members[rb]
         members[rb] = set()

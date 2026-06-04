@@ -60,6 +60,10 @@ class EventWriter:
     def __len__(self) -> int:
         return len(self._events)
 
+    def events(self) -> list[StoreEvent]:
+        """The collected events (post-pass passes read this for group detection)."""
+        return self._events
+
     def finalize_staff(self, staff_ids: set[str]) -> int:
         """Stamp is_staff on every event from the resolved staff set.
 
@@ -100,6 +104,31 @@ class EventWriter:
                 ev.visitor_id = new
                 changed += 1
         return changed
+
+    def stamp_visitor_metadata(self, mapping: dict[str, dict[str, Any]]) -> int:
+        """Merge per-visitor metadata (e.g. gender/age_bucket from the VLM, or
+        group_id/group_size from group detection) onto every event of that visitor.
+
+        Called in the post-pass after dedup/relabel, so ``mapping`` is keyed by the
+        FINAL canonical visitor_id. Only non-null values are written (a null guess is
+        simply not stamped, so the API doesn't count it). Returns events touched."""
+        if not mapping:
+            return 0
+        touched = 0
+        for ev in self._events:
+            extra = mapping.get(ev.visitor_id)
+            if not extra:
+                continue
+            md = dict(ev.metadata or {})
+            changed = False
+            for key, val in extra.items():
+                if val is not None and md.get(key) != val:
+                    md[key] = val
+                    changed = True
+            if changed:
+                ev.metadata = md
+                touched += 1
+        return touched
 
     def write(self, path: str) -> int:
         self._events.sort(key=lambda e: e.timestamp)

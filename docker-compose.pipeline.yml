@@ -13,7 +13,12 @@ services:
       dockerfile: docker/Dockerfile.pipeline
     volumes:
       - ./data:/work/data
-      - ./pipeline/config:/work/pipeline/config
+      # Source is mounted (not just config) so CODE edits are live too -- no image
+      # rebuild for changes to pipeline/*.py or app/*.py. These shadow the copies the
+      # Dockerfile bakes in; deps live in site-packages, so nothing installed is hidden.
+      # (config stays live too -- it is a subdir of the mounted ./pipeline.)
+      - ./pipeline:/work/pipeline
+      - ./app:/work/app
     # Pass your .env into the container so GEMINI_API_KEY reaches the staff VLM.
     env_file:
       - .env

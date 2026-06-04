@@ -98,7 +98,21 @@ def run(
         if embs:
             from pipeline.dedup import build_merge_map  # lazy
 
-            merge_map = build_merge_map(embs, _same_camera_overlap(evidence), dedup_threshold)
+            # Optional VLM tie-breaker for the borderline embedding band
+            # [low, threshold): a same-person check vets merges the strict embedding
+            # threshold would miss, without the false merges of just lowering it. Off
+            # (None) unless a VLM is available -> dedup stays embedding-only.
+            low_thr = float(os.environ.get("REID_DEDUP_LOW", "0.74"))
+            confirm = _make_dedup_confirm(vlm, evidence)
+            merge_map = build_merge_map(
+                embs, _same_camera_overlap(evidence), dedup_threshold,
+                low_threshold=low_thr if (confirm and low_thr < dedup_threshold) else None,
+                confirm=confirm,
+            )
+            if confirm is not None:
+                print(f"Dedup VLM tie-breaker: {confirm.confirmed} borderline merge(s) "
+                      f"confirmed of {confirm.asked} pair(s) asked "
+                      f"(band [{low_thr}, {dedup_threshold}))", flush=True)
     relabeled = writer.relabel_visitors(merge_map)
     staff_ids = {merge_map.get(s, s) for s in staff_ids}
 
@@ -107,6 +121,29 @@ def run(
     for d in decisions:
         if d["decision"] == "staff":
             by_src[d["source"]] = by_src.get(d["source"], 0) + 1
+
+    # --- coarse demographics (Part B / new-schema): the per-visitor VLM call already
+    # made for staff resolution also returns a best-effort gender/age_bucket; map those
+    # onto the FINAL canonical visitor and stamp into event metadata (first non-null
+    # wins per person). Best-effort on blurred footage -> flagged in DESIGN/CHOICES. ---
+    demo_map: dict[str, dict[str, Any]] = {}
+    for d in decisions:
+        g, ab = d.get("gender"), d.get("age_bucket")
+        if g is None and ab is None:
+            continue
+        canon = merge_map.get(d["visitor_id"], d["visitor_id"])
+        rec = demo_map.setdefault(canon, {})
+        if g is not None and rec.get("gender") is None:
+            rec["gender"] = g
+        if ab is not None and rec.get("age_bucket") is None:
+            rec["age_bucket"] = ab
+    stamped_demo = writer.stamp_visitor_metadata(demo_map)
+
+    # --- group shopping (Part B / new-schema): conservative co-presence detection ---
+    from pipeline.groups import detect_groups  # lazy (pure-Python helper)
+
+    groups = detect_groups(writer.events(), staff_ids)
+    stamped_grp = writer.stamp_visitor_metadata(groups)
 
     # Drop flicker tracks: sum frames per *canonical* visitor (after merge).
     canon_frames: dict[str, int] = {}
@@ -127,6 +164,9 @@ def run(
     )
     print(f"Dropped {removed} event(s) from {len(short)} short/flicker track(s) "
           f"(< {min_track_frames} frames)")
+    n_groups = len({g["group_id"] for g in groups.values()})
+    print(f"Demographics: stamped {len(demo_map)} visitor(s) ({stamped_demo} events); "
+          f"Groups: {n_groups} group(s) over {len(groups)} visitor(s) ({stamped_grp} events)")
 
     if debug_dump and track_rows:
         _write_debug_dump(debug_dump, track_rows, merge_map, staff_ids)
@@ -160,6 +200,41 @@ def _write_debug_dump(path: str, rows: list, merge_map: dict, staff_ids: set) ->
             vid = merge_map.get(r["visitor_id"], r["visitor_id"])
             out = {**r, "visitor_id": vid, "is_staff": vid in staff_ids}
             fh.write(json.dumps(out) + "\n")
+
+
+def _make_dedup_confirm(vlm, evidence):
+    """Build a ``confirm(a, b) -> bool`` same-person check for the dedup borderline
+    band, or None if no VLM. Uses each token's clearest crops; caps total pairs asked
+    (``VLM_DEDUP_MAX_PAIRS``) and requires high VLM confidence (``VLM_DEDUP_CONF``).
+    The same-camera-overlap block in build_merge_map still applies first, so this only
+    ever runs on cross-fragment / cross-camera pairs."""
+    if vlm is None or not getattr(vlm, "available", False):
+        return None
+
+    crops = {
+        vid: [c for _, c in sorted(v.crops, key=lambda c: c[0], reverse=True)]
+        for vid, v in evidence.visitors.items()
+    }
+    conf_gate = float(os.environ.get("VLM_DEDUP_CONF", "0.8"))
+    max_pairs = int(os.environ.get("VLM_DEDUP_MAX_PAIRS", "80"))
+
+    def confirm(a: str, b: str) -> bool:
+        ca, cb = crops.get(a, []), crops.get(b, [])
+        if not ca or not cb:
+            return False
+        if max_pairs and confirm.asked >= max_pairs:
+            return False
+        confirm.asked += 1
+        key = f"PAIR::{min(a, b)}::{max(a, b)}"
+        v = vlm.same_person(key, ca, cb, {"pair": confirm.asked})
+        ok = bool(v and v.get("same")) and float((v or {}).get("confidence", 0.0)) >= conf_gate
+        if ok:
+            confirm.confirmed += 1
+        return ok
+
+    confirm.asked = 0
+    confirm.confirmed = 0
+    return confirm
 
 
 def _make_vlm(use_vlm: Optional[bool]):

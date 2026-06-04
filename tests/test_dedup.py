@@ -40,3 +40,37 @@ def test_block_prevents_transitive_collapse():
 def test_empty_and_single():
     assert build_merge_map({}) == {}
     assert build_merge_map({"x": [1.0, 2.0]}) == {"x": "x"}
+
+
+# --- VLM borderline-band tie-breaker (gated confirmer) ---
+import math
+
+# cosine ~0.78 -> inside the borderline band [0.74, 0.82); 0.85 -> auto band.
+_A = [1.0, 0.0]
+_B = [0.78, math.sqrt(1 - 0.78 ** 2)]
+_C = [0.85, math.sqrt(1 - 0.85 ** 2)]
+
+
+def test_borderline_needs_confirm():
+    embs = {"a": _A, "b": _B}
+    # no confirmer -> borderline pair stays separate (embedding-only behaviour)
+    assert build_merge_map(embs, threshold=0.82, low_threshold=0.74) == {"a": "a", "b": "b"}
+    # confirm False -> still separate; confirm True -> merged
+    assert build_merge_map(embs, threshold=0.82, low_threshold=0.74,
+                           confirm=lambda a, b: False)["b"] == "b"
+    assert build_merge_map(embs, threshold=0.82, low_threshold=0.74,
+                           confirm=lambda a, b: True)["b"] == "a"
+
+
+def test_auto_band_ignores_confirmer():
+    # >= threshold merges regardless of the confirmer's answer
+    embs = {"a": _A, "c": _C}
+    m = build_merge_map(embs, threshold=0.82, low_threshold=0.74, confirm=lambda a, b: False)
+    assert m["c"] == "a"
+
+
+def test_block_beats_confirm_in_borderline():
+    embs = {"a": _A, "b": _B}
+    m = build_merge_map(embs, blocked_pairs=[("a", "b")], threshold=0.82,
+                        low_threshold=0.74, confirm=lambda a, b: True)
+    assert m["a"] != m["b"]   # provably-different (same-camera overlap) is never merged
