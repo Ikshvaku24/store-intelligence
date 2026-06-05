@@ -7,6 +7,7 @@
 # ============================================================================
 /data/*
 !/data/.gitkeep
+!/data/events*.jsonl
 
 # CCTV footage / frames anywhere (videos + extracted images)
 *.mp4
